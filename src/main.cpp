@@ -60,6 +60,8 @@ struct ProgramState {
     bool CameraMouseMovementUpdateEnabled = true;
     glm::vec3 backpackPosition = glm::vec3(0.0f);
     float backpackScale = 1.0f;
+    glm::vec3 lanternPosition = glm::vec3(0.0f, 0.0f, 10.0f);
+    float lanternScale = 0.3f;
     PointLight pointLight;
     ProgramState()
             : camera(glm::vec3(0.0f, 0.0f, 3.0f)) {}
@@ -103,7 +105,6 @@ ProgramState *programState;
 
 void DrawImGui(ProgramState *programState);
 
-
 float transparentVertices[] = {
         // positions         // texture Coords (swapped y coordinates because texture is flipped upside down)
         0.0f,  0.5f,  0.0f,  0.0f,  0.0f,
@@ -114,15 +115,6 @@ float transparentVertices[] = {
         1.0f, -0.5f,  0.0f,  1.0f,  1.0f,
         1.0f,  0.5f,  0.0f,  1.0f,  0.0f
 };
-
-vector<glm::vec3> vegetation
-        {
-                glm::vec3(-0.5f, 1.0f, -0.48f),
-                glm::vec3( 1.5f, 0.0f, 0.51f),
-                glm::vec3( 0.0f, 0.0f, 0.7f),
-                glm::vec3(-0.3f, 0.0f, -2.3f),
-                glm::vec3 (0.5f, 0.0f, -0.6f)
-        };
 
 int main() {
     // glfw: initialize and configure
@@ -173,8 +165,6 @@ int main() {
     ImGuiIO &io = ImGui::GetIO();
     (void) io;
 
-
-
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330 core");
 
@@ -188,12 +178,24 @@ int main() {
     Shader ourShader("resources/shaders/2.model_lighting.vs", "resources/shaders/2.model_lighting.fs");
     Shader grassShader("resources/shaders/grass_shader.vs", "resources/shaders/grass_shader.fs");
 
-    // load models
-    // -----------
-    Model ourModel("resources/objects/vangogh/VanGoghBedroomInArlesNight.obj");
-    ourModel.SetShaderTextureNamePrefix("material.");
+    unsigned int amount = 100000;
+    glm::vec3 translations[amount];
+    srand(glfwGetTime());
+    float outerRadius = 100.0f;
+    float innerRadius = 20.0f;
+    for (unsigned int i = 0; i < amount; i++)
+    {
+        float radius = (float)rand()/RAND_MAX;
+        float angle = rand();
+        translations[i] = glm::vec3(cos(angle) * (radius * outerRadius + innerRadius), 0.0f, sin(angle) * (radius * outerRadius + innerRadius));
+    }
 
-    // transparent VAO
+    unsigned int instanceVBO;
+    glGenBuffers(1, &instanceVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(translations), translations, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
     unsigned int transparentVAO, transparentVBO;
     glGenVertexArrays(1, &transparentVAO);
     glGenBuffers(1, &transparentVBO);
@@ -204,7 +206,20 @@ int main() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glVertexAttribDivisor(2, 1);
     glBindVertexArray(0);
+
+
+    // load models
+    // -----------
+    Model ourModel("resources/objects/vangogh/VanGoghBedroomInArlesNight.obj");
+    ourModel.SetShaderTextureNamePrefix("material.");
+    Model lantern("resources/objects/lantern2/source/Lantern.obj");
+    lantern.SetShaderTextureNamePrefix("material.");
 
     // load textures
     // -------------
@@ -248,7 +263,7 @@ int main() {
 
         // don't forget to enable shader before setting uniforms
         ourShader.use();
-        pointLight.position = glm::vec3(0.0 /* * cos(currentFrame)*/, 2.0f, 0.0 /* * sin(currentFrame)*/);
+        pointLight.position = glm::vec3(0.2 * cos(currentFrame), 2.0f, 0.2 * sin(currentFrame));
         ourShader.setVec3("pointLight.position", pointLight.position);
         ourShader.setVec3("pointLight.ambient", pointLight.ambient);
         ourShader.setVec3("pointLight.diffuse", pointLight.diffuse);
@@ -273,18 +288,34 @@ int main() {
         ourShader.setMat4("model", model);
         ourModel.Draw(ourShader);
 
+        model = glm::mat4(1.0f);
+        model = glm::translate(model,
+                               programState->lanternPosition); // translate it down so it's at the center of the scene
+        model = glm::scale(model, glm::vec3(programState->lanternScale));    // it's a bit too big for our scene, so scale it down
+        ourShader.setMat4("model", model);
+        lantern.Draw(ourShader);
+
         grassShader.use();
         grassShader.setMat4("projection", projection);
         grassShader.setMat4("view", view);
+
+
+//        glActiveTexture(GL_TEXTURE0);
+//        glBindTexture(GL_TEXTURE_2D, transparentTexture); // note: we also made the textures_loaded vector public (instead of private) from the model class.
+//        for (unsigned int i = 0; i < amount; i++)
+//        {
+//            glBindVertexArray(transparentVAOs[i]);
+//            glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, amount);
+//            glBindVertexArray(0);
+//        }
+
         glBindVertexArray(transparentVAO);
         glBindTexture(GL_TEXTURE_2D, transparentTexture);
-        for (unsigned int i = 0; i < 1; i++)
-        {
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, vegetation[i]);
-            grassShader.setMat4("model", model);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-        }
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 3.5f));
+        model = glm::scale(model, glm::vec3(0.2f));
+        grassShader.setMat4("model", model);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, amount);
 
         if (programState->ImGuiEnabled)
             DrawImGui(programState);
