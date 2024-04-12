@@ -63,6 +63,7 @@ struct ProgramState {
     glm::vec3 lanternPosition = glm::vec3(0.0f, 0.0f, 10.0f);
     float lanternScale = 0.3f;
     PointLight pointLight;
+    PointLight cubeLight;
     ProgramState()
             : camera(glm::vec3(0.0f, 0.0f, 3.0f)) {}
 
@@ -172,11 +173,14 @@ int main() {
     // -----------------------------
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // build and compile shaders
     // -------------------------
     Shader ourShader("resources/shaders/2.model_lighting.vs", "resources/shaders/2.model_lighting.fs");
     Shader grassShader("resources/shaders/grass_shader.vs", "resources/shaders/grass_shader.fs");
+    Shader lightShader("resources/shaders/light_cube.vs", "resources/shaders/light_cube.fs");
 
     unsigned int amount = 100000;
     glm::vec3 translations[amount];
@@ -213,6 +217,68 @@ int main() {
     glVertexAttribDivisor(2, 1);
     glBindVertexArray(0);
 
+    // set up vertex data (and buffer(s)) and configure vertex attributes
+    // ------------------------------------------------------------------
+    float lightVertices[] = {
+            // positions          // normals           // texture coords
+            -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,
+            0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f,  0.0f,
+            0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f,  1.0f,
+            0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f,  1.0f,
+            -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f,  1.0f,
+            -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,
+
+            -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,
+            0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  1.0f,  0.0f,
+            0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  1.0f,  1.0f,
+            0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  1.0f,  1.0f,
+            -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f,  1.0f,
+            -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,
+
+            -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  1.0f,  0.0f,
+            -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  1.0f,  1.0f,
+            -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f,  1.0f,
+            -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f,  1.0f,
+            -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,
+            -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  1.0f,  0.0f,
+
+            0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,
+            0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  1.0f,  1.0f,
+            0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f,  1.0f,
+            0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f,  1.0f,
+            0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,
+            0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,
+
+            -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  0.0f,  1.0f,
+            0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  1.0f,  1.0f,
+            0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  1.0f,  0.0f,
+            0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  1.0f,  0.0f,
+            -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,
+            -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  0.0f,  1.0f,
+
+            -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,
+            0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  1.0f,  1.0f,
+            0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  1.0f,  0.0f,
+            0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  1.0f,  0.0f,
+            -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,
+            -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f
+    };
+    glm::vec3 cubeLightPosition = glm::vec3( 0.0f,  3.0f,  10.0f);
+    unsigned int lightVAO, lightVBO;
+    glGenVertexArrays(1, &lightVAO);
+    glGenBuffers(1, &lightVBO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, lightVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(lightVertices), lightVertices, GL_STATIC_DRAW);
+
+    glBindVertexArray(lightVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, lightVBO);
+    // note that we update the lamp's position attribute's stride to reflect the updated buffer data
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+
 
     // load models
     // -----------
@@ -234,6 +300,16 @@ int main() {
     pointLight.constant = 1.0f;
     pointLight.linear = 0.09f;
     pointLight.quadratic = 0.032f;
+
+    PointLight& cubeLight = programState->cubeLight;
+    cubeLight.position = glm::vec3(0.0f, 3.0f, 10.0f);
+    cubeLight.ambient = glm::vec3(0.3, 0.3, 0.3);
+    cubeLight.diffuse = glm::vec3(0.8, 0.8, 0.8);
+    cubeLight.specular = glm::vec3(1.0, 1.0, 1.0);
+
+    cubeLight.constant = 1.0f;
+    cubeLight.linear = 0.045f;
+    cubeLight.quadratic = 0.0075f;
 
 
 
@@ -263,14 +339,21 @@ int main() {
 
         // don't forget to enable shader before setting uniforms
         ourShader.use();
-        pointLight.position = glm::vec3(0.2 * cos(currentFrame), 2.0f, 0.2 * sin(currentFrame));
-        ourShader.setVec3("pointLight.position", pointLight.position);
-        ourShader.setVec3("pointLight.ambient", pointLight.ambient);
-        ourShader.setVec3("pointLight.diffuse", pointLight.diffuse);
-        ourShader.setVec3("pointLight.specular", pointLight.specular);
-        ourShader.setFloat("pointLight.constant", pointLight.constant);
-        ourShader.setFloat("pointLight.linear", pointLight.linear);
-        ourShader.setFloat("pointLight.quadratic", pointLight.quadratic);
+        pointLight.position = glm::vec3(0.05 * cos(currentFrame), 2.0f + 0.05 * sin(currentFrame), 0.2);
+        ourShader.setVec3("pointLight1.position", pointLight.position);
+        ourShader.setVec3("pointLight1.ambient", pointLight.ambient);
+        ourShader.setVec3("pointLight1.diffuse", pointLight.diffuse);
+        ourShader.setVec3("pointLight1.specular", pointLight.specular);
+        ourShader.setFloat("pointLight1.constant", pointLight.constant);
+        ourShader.setFloat("pointLight1.linear", pointLight.linear);
+        ourShader.setFloat("pointLight1.quadratic", pointLight.quadratic);
+        ourShader.setVec3("pointLight2.position", cubeLight.position);
+        ourShader.setVec3("pointLight2.ambient", cubeLight.ambient);
+        ourShader.setVec3("pointLight2.diffuse", cubeLight.diffuse);
+        ourShader.setVec3("pointLight2.specular", cubeLight.specular);
+        ourShader.setFloat("pointLight2.constant", cubeLight.constant);
+        ourShader.setFloat("pointLight2.linear", cubeLight.linear);
+        ourShader.setFloat("pointLight2.quadratic", cubeLight.quadratic);
         ourShader.setVec3("viewPosition", programState->camera.Position);
         ourShader.setFloat("material.shininess", 32.0f);
         // view/projection transformations
@@ -295,19 +378,19 @@ int main() {
         ourShader.setMat4("model", model);
         lantern.Draw(ourShader);
 
+        lightShader.use();
+        lightShader.setMat4("projection", projection);
+        lightShader.setMat4("view", view);
+        glBindVertexArray(lightVAO);
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, cubeLightPosition);
+        model = glm::scale(model, glm::vec3(0.7f)); // Make it a smaller cube
+        lightShader.setMat4("model", model);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
         grassShader.use();
         grassShader.setMat4("projection", projection);
         grassShader.setMat4("view", view);
-
-
-//        glActiveTexture(GL_TEXTURE0);
-//        glBindTexture(GL_TEXTURE_2D, transparentTexture); // note: we also made the textures_loaded vector public (instead of private) from the model class.
-//        for (unsigned int i = 0; i < amount; i++)
-//        {
-//            glBindVertexArray(transparentVAOs[i]);
-//            glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, amount);
-//            glBindVertexArray(0);
-//        }
 
         glBindVertexArray(transparentVAO);
         glBindTexture(GL_TEXTURE_2D, transparentTexture);
