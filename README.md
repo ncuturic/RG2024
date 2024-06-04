@@ -6,3 +6,12 @@ Projekat za predmet Računarska grafika
 ## Grupa A
 
 Instancing
+
+## Grupa B
+
+HDR + Bloom
+
+*Kontrole:*
+Space - Bloom on/off
+Q     - Exposure -
+E     - Exposure +
